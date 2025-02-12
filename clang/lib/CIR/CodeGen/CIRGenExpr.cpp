@@ -24,6 +24,7 @@
 #include "clang/AST/ExprCXX.h"
 #include "clang/AST/GlobalDecl.h"
 #include "clang/Basic/Builtins.h"
+#include "clang/Basic/LLVM.h"
 #include "clang/CIR/Dialect/IR/CIRDialect.h"
 #include "clang/CIR/Dialect/IR/CIROpsEnums.h"
 #include "clang/CIR/Dialect/IR/CIRTypes.h"
@@ -34,6 +35,7 @@
 #include "llvm/Support/ErrorHandling.h"
 
 #include "llvm/ADT/StringExtras.h"
+#include <clang/AST/Attrs.inc>
 
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Operation.h"
@@ -46,12 +48,17 @@ using namespace cir;
 static cir::FuncOp emitFunctionDeclPointer(CIRGenModule &CGM, GlobalDecl GD) {
   const auto *FD = cast<FunctionDecl>(GD.getDecl());
 
+  if (!((CGM.getLangOpts().CUDA || CGM.getLangOpts().HIP) &&
+        FD->hasAttr<CUDAGlobalAttr>()))
+    llvm_unreachable("NYI");
+
   if (FD->hasAttr<WeakRefAttr>()) {
     mlir::Operation *aliasee = CGM.getWeakRefReference(FD);
     return dyn_cast<FuncOp>(aliasee);
   }
 
-  auto V = CGM.GetAddrOfFunction(GD);
+  auto V = dyn_cast<FuncOp>(CGM.GetAddrOfFunction(GD));
+  assert(V && "Expected Function Operation");
 
   return V;
 }
@@ -977,6 +984,11 @@ LValue CIRGenFunction::emitLValueForLambdaField(const FieldDecl *field) {
 static LValue emitFunctionDeclLValue(CIRGenFunction &CGF, const Expr *E,
                                      GlobalDecl GD) {
   const FunctionDecl *FD = cast<FunctionDecl>(GD.getDecl());
+
+  if (!((CGF.getCIRGenModule().getLangOpts().CUDA ||
+         CGF.getCIRGenModule().getLangOpts().HIP) &&
+        FD->hasAttr<CUDAGlobalAttr>()))
+    llvm_unreachable("NYI");
   auto funcOp = emitFunctionDeclPointer(CGF.CGM, GD);
   auto loc = CGF.getLoc(E->getSourceRange());
   CharUnits align = CGF.getContext().getDeclAlign(FD);

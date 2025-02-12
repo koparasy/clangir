@@ -28,6 +28,13 @@ class CIRGenCUDARuntime {
 protected:
   CIRGenModule &cgm;
 
+  // Map a device stub function to a symbol for identifying kernel in host code.
+  // For CUDA, the symbol for identifying the kernel is the same as the device
+  // stub function. For HIP, they are different.
+  llvm::DenseMap<mlir::Operation *, mlir::Operation *> KernelHandles;
+  // Map a kernel handle to the kernel stub.
+  llvm::DenseMap<mlir::Operation *, mlir::Operation *> KernelStubs;
+
 private:
   void emitDeviceStubBodyLegacy(CIRGenFunction &cgf, cir::FuncOp fn,
                                 FunctionArgList &args);
@@ -40,6 +47,7 @@ public:
 
   virtual void emitDeviceStub(CIRGenFunction &cgf, cir::FuncOp fn,
                               FunctionArgList &args);
+  virtual mlir::Operation *getKernelHandle(cir::FuncOp fn, GlobalDecl GD);
 };
 
 } // namespace clang::CIRGen

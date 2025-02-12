@@ -19,6 +19,7 @@
 #include "clang/AST/RecordLayout.h"
 #include "clang/AST/VTTBuilder.h"
 #include "clang/Basic/CodeGenOptions.h"
+#include "clang/Basic/LLVM.h"
 #include "clang/CIR/Dialect/IR/CIRAttrs.h"
 #include "clang/CIR/Dialect/IR/CIRTypes.h"
 #include "clang/CodeGen/CGFunctionInfo.h"
@@ -280,7 +281,9 @@ void CIRGenVTables::addVTableComponent(ConstantArrayBuilder &builder,
     } else {
       // Otherwise we can use the method definition directly.
       auto fnTy = CGM.getTypes().GetFunctionTypeForVTable(GD);
-      fnPtr = CGM.GetAddrOfFunction(GD, fnTy, /*ForVTable=*/true);
+      fnPtr = dyn_cast<cir::FuncOp>(
+          CGM.GetAddrOfFunction(GD, fnTy, /*ForVTable=*/true));
+      assert(fnPtr && "Expected Function Operation");
     }
 
     if (useRelativeLayout()) {

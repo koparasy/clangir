@@ -14,6 +14,7 @@
 
 #include "CIRGenCUDARuntime.h"
 #include "CIRGenFunction.h"
+#include "mlir/IR/Operation.h"
 #include "clang/Basic/Cuda.h"
 #include "clang/CIR/Dialect/IR/CIRTypes.h"
 
@@ -157,15 +158,51 @@ void CIRGenCUDARuntime::emitDeviceStubBodyNew(CIRGenFunction &cgf,
 
 void CIRGenCUDARuntime::emitDeviceStub(CIRGenFunction &cgf, cir::FuncOp fn,
                                        FunctionArgList &args) {
-  // Device stub and its handle might be different.
-  if (cgm.getLangOpts().HIP)
-    llvm_unreachable("NYI");
 
   // CUDA 9.0 changed the way to launch kernels.
   if (CudaFeatureEnabled(cgm.getTarget().getSDKVersion(),
                          CudaFeature::CUDA_USES_NEW_LAUNCH) ||
+      (cgm.getLangOpts().HIP && cgm.getLangOpts().HIPUseNewLaunchAPI) ||
       cgm.getLangOpts().OffloadViaLLVM)
     emitDeviceStubBodyNew(cgf, fn, args);
   else
     emitDeviceStubBodyLegacy(cgf, fn, args);
+}
+
+mlir::Operation *CIRGenCUDARuntime::getKernelHandle(cir::FuncOp fn,
+                                                    GlobalDecl GD) {
+
+  // Check if we already have a kernel handle for this function
+  auto Loc = KernelHandles.find(fn);
+  if (Loc != KernelHandles.end())
+    return Loc->second;
+
+  // If not targeting HIP, store the function itself
+  if (!cgm.getLangOpts().HIP) {
+    KernelHandles[fn] = fn;
+    KernelStubs[fn] = fn;
+    return fn;
+  }
+
+  // Create a new CIR global variable to represent the kernel handle
+  auto &builder = cgm.getBuilder();
+  auto globalName = cgm.getMangledName(
+      GD.getWithKernelReferenceKind(KernelReferenceKind::Kernel));
+  auto globalOp = cgm.getOrInsertGlobal(
+      fn->getLoc(), globalName, fn.getFunctionType(), [&] {
+        return CIRGenModule::createGlobalOp(
+            cgm, fn->getLoc(), globalName,
+            builder.getPointerTo(fn.getFunctionType()), true, /* addrSpace=*/{},
+            /*insertPoint=*/nullptr, fn.getLinkage());
+      });
+
+  globalOp->setAttr("alignment", builder.getI64IntegerAttr(
+                                     cgm.getPointerAlign().getQuantity()));
+  globalOp->setAttr("visibility", fn->getAttr("sym_visibility"));
+
+  // Store references
+  KernelHandles[fn] = globalOp;
+  KernelStubs[globalOp] = fn;
+
+  return globalOp;
 }

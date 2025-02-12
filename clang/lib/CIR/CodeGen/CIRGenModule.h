@@ -687,7 +687,7 @@ public:
   /// Return the address of the given function. If Ty is non-null, then this
   /// function will use the specified type if it has to create it.
   // TODO: this is a bit weird as `GetAddr` given we give back a FuncOp?
-  cir::FuncOp
+  mlir::Operation *
   GetAddrOfFunction(clang::GlobalDecl GD, mlir::Type Ty = nullptr,
                     bool ForVTable = false, bool Dontdefer = false,
                     ForDefinition_t IsForDefinition = NotForDefinition);
