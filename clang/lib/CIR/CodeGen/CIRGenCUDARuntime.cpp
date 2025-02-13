@@ -145,23 +145,14 @@ void CIRGenCUDARuntime::emitDeviceStubBodyNew(CIRGenFunction &cgf,
 
   // We now either pick the function or the stub global for cuda, hip
   // resepectively.
-  llvm::errs() << "Handle:\n";
-  KernelHandles[fn]->dump();
   auto kernel = [&]() {
     if (auto globalOp =
             llvm::dyn_cast_or_null<cir::GlobalOp>(KernelHandles[fn])) {
       auto kernelTy =
           cir::PointerType::get(&cgm.getMLIRContext(), globalOp.getSymType());
-      auto kernel = builder.create<cir::GetGlobalOp>(loc, kernelTy,
-                                                     globalOp.getSymName());
-      auto resultType = dyn_cast<cir::PointerType>(kernel.getAddr().getType());
-      auto symTy = globalOp.getSymType();
-      if (!resultType || symTy != resultType.getPointee())
-        llvm::errs() << "result type pointee type '" << resultType.getPointee()
-                     << "' does not match type " << symTy << " of the global @"
-                     << globalOp.getName();
-      mlir::Value kernelRaw = kernel.getResult();
-      return kernelRaw;
+      mlir::Value kernel = builder.create<cir::GetGlobalOp>(
+          loc, kernelTy, globalOp.getSymName());
+      return kernel;
     }
     if (auto funcOp = llvm::dyn_cast_or_null<cir::FuncOp>(KernelHandles[fn])) {
       auto kernelTy = cir::PointerType::get(&cgm.getMLIRContext(),
@@ -175,10 +166,6 @@ void CIRGenCUDARuntime::emitDeviceStubBodyNew(CIRGenFunction &cgf,
   }();
   // mlir::Value func = builder.createBitcast(kernel, cgm.VoidPtrTy);
   CallArgList launchArgs;
-  launchFD->dump();
-
-  // llvm::errs() << "Func (casted) Type: ";
-  // func.getType().dump();
 
   mlir::Value kernelArgsDecayed =
       builder.createCast(cir::CastKind::array_to_ptrdecay, kernelArgs,
@@ -213,11 +200,7 @@ void CIRGenCUDARuntime::emitDeviceStub(CIRGenFunction &cgf, cir::FuncOp fn,
     // Set the initializer for the global
     cgm.setInitializer(globalOp, symbol);
   }
-  llvm::errs() << "Before\n";
-  cgm.getModule()->dump();
   // CUDA 9.0 changed the way to launch kernels.
-  std::cout << "Use New LaunchAPI " << cgm.getLangOpts().HIPUseNewLaunchAPI
-            << " HIP: " << cgm.getLangOpts().HIP << "\n";
   if (CudaFeatureEnabled(cgm.getTarget().getSDKVersion(),
                          CudaFeature::CUDA_USES_NEW_LAUNCH) ||
       (cgm.getLangOpts().HIP && cgm.getLangOpts().HIPUseNewLaunchAPI) ||
@@ -225,9 +208,6 @@ void CIRGenCUDARuntime::emitDeviceStub(CIRGenFunction &cgf, cir::FuncOp fn,
     emitDeviceStubBodyNew(cgf, fn, args);
   else
     emitDeviceStubBodyLegacy(cgf, fn, args);
-
-  llvm::errs() << "After\n";
-  cgm.getModule()->dump();
 }
 
 mlir::Operation *CIRGenCUDARuntime::getKernelHandle(cir::FuncOp fn,
@@ -260,10 +240,6 @@ mlir::Operation *CIRGenCUDARuntime::getKernelHandle(cir::FuncOp fn,
   globalOp->setAttr("alignment", builder.getI64IntegerAttr(
                                      cgm.getPointerAlign().getQuantity()));
   globalOp->setAttr("visibility", fn->getAttr("sym_visibility"));
-
-  llvm::errs() << "Here we are:\n";
-  globalOp.getSymType().dump();
-  llvm::errs() << "Sym Type is: " << globalOp.getSymName() << "\n";
 
   // Store references
   KernelHandles[fn] = globalOp;
