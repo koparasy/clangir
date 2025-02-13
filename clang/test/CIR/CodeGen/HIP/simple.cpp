@@ -11,13 +11,22 @@
 // RUN: FileCheck --check-prefix=CIR-DEVICE --input-file=%t.cir %s
 
 // Attribute for global_fn
-// CIR-HOST: [[Kernel:#[a-zA-Z_0-9]+]] = {{.*}}#cir.cuda_kernel_name<_Z9global_fnv>{{.*}}
+// CIR-HOST: [[Kernel:#[a-zA-Z_0-9]+]] = {{.*}}#cir.cuda_kernel_name<_Z9global_fni>{{.*}}
 
-// This should emit as a normal C++ function.
+
 __host__ void host_fn(int *a, int *b, int *c) {}
+// CIR-HOST: cir.func @_Z7host_fnPiS_S_
+// CIR-DEVICE-NOT: cir.func @_Z7host_fnPiS_S_
 
-// CIR: cir.func @_Z7host_fnPiS_S_
+__device__ void device_fn(int* a, double b, float c) {}
+// CIR-HOST-NOT: cir.func @_Z9device_fnPidf
+// CIR-DEVICE: cir.func @_Z9device_fnPidf
 
-__global__ void global_fn() {}
-// CIR-HOST: @_Z24__device_stub__global_fnv(){{.*}}extra([[Kernel]])
-// CIR-DEVICE: @_Z9global_fnv
+__global__ void global_fn(int a) {}
+// CIR-DEVICE: @_Z9global_fni
+
+// CIR-HOST: cir.alloca {{.*}}"kernel_args"
+// CIR-HOST: cir.call @__hipPopCallConfiguration
+// Host access the global stub instead of the original
+// CIR-HOST: cir.get_global @_Z9global_fni
+// CIR-HOST: cir.call @hipLaunchKernel
