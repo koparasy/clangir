@@ -48,8 +48,8 @@ using namespace cir;
 static cir::FuncOp emitFunctionDeclPointer(CIRGenModule &CGM, GlobalDecl GD) {
   const auto *FD = cast<FunctionDecl>(GD.getDecl());
 
-  if (!((CGM.getLangOpts().CUDA || CGM.getLangOpts().HIP) &&
-        FD->hasAttr<CUDAGlobalAttr>()))
+  if ((CGM.getLangOpts().CUDA || CGM.getLangOpts().HIP) &&
+      FD->hasAttr<CUDAGlobalAttr>())
     llvm_unreachable("NYI");
 
   if (FD->hasAttr<WeakRefAttr>()) {
@@ -985,9 +985,9 @@ static LValue emitFunctionDeclLValue(CIRGenFunction &CGF, const Expr *E,
                                      GlobalDecl GD) {
   const FunctionDecl *FD = cast<FunctionDecl>(GD.getDecl());
 
-  if (!((CGF.getCIRGenModule().getLangOpts().CUDA ||
-         CGF.getCIRGenModule().getLangOpts().HIP) &&
-        FD->hasAttr<CUDAGlobalAttr>()))
+  if ((CGF.getCIRGenModule().getLangOpts().CUDA ||
+       CGF.getCIRGenModule().getLangOpts().HIP) &&
+      FD->hasAttr<CUDAGlobalAttr>())
     llvm_unreachable("NYI");
   auto funcOp = emitFunctionDeclPointer(CGF.CGM, GD);
   auto loc = CGF.getLoc(E->getSourceRange());
