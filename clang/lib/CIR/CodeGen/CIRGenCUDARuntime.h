@@ -27,6 +27,7 @@ class FunctionArgList;
 class CIRGenCUDARuntime {
 protected:
   CIRGenModule &cgm;
+  StringRef Prefix;
 
   // Map a device stub function to a symbol for identifying kernel in host code.
   // For CUDA, the symbol for identifying the kernel is the same as the device
@@ -40,9 +41,11 @@ private:
                                 FunctionArgList &args);
   void emitDeviceStubBodyNew(CIRGenFunction &cgf, cir::FuncOp fn,
                              FunctionArgList &args);
+  std::string addPrefixToName(StringRef FuncName) const;
+  std::string addUnderscoredPrefixToName(StringRef FuncName) const;
 
 public:
-  CIRGenCUDARuntime(CIRGenModule &cgm) : cgm(cgm) {}
+  CIRGenCUDARuntime(CIRGenModule &cgm);
   virtual ~CIRGenCUDARuntime();
 
   virtual void emitDeviceStub(CIRGenFunction &cgf, cir::FuncOp fn,
