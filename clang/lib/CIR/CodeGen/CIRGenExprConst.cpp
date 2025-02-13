@@ -27,7 +27,6 @@
 #include "clang/Basic/Specifiers.h"
 #include "clang/CIR/Dialect/IR/CIRAttrs.h"
 #include "clang/CIR/Dialect/IR/CIRDataLayout.h"
-#include "clang/CIR/Dialect/IR/CIRDialect.h"
 #include "clang/CIR/Dialect/IR/CIRTypes.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/Sequence.h"
@@ -1507,8 +1506,7 @@ ConstantLValueEmitter::tryEmitBase(const APValue::LValueBase &base) {
       llvm_unreachable("emit pointer base for weakref is NYI");
 
     if (auto *FD = dyn_cast<FunctionDecl>(D)) {
-      auto fop = dyn_cast<cir::FuncOp>(CGM.GetAddrOfFunction(FD));
-      assert(fop && "Expected Function Operation");
+      auto fop = CGM.GetAddrOfFunction(FD);
       auto builder = CGM.getBuilder();
       mlir::MLIRContext *mlirContext = builder.getContext();
       return cir::GlobalViewAttr::get(
@@ -2041,8 +2039,7 @@ mlir::Value CIRGenModule::emitMemberPointerConstant(const UnaryOperator *E) {
       return builder.create<cir::ConstantOp>(
           loc, ty, getCXXABI().buildVirtualMethodAttr(ty, methodDecl));
 
-    auto methodFuncOp = dyn_cast<cir::FuncOp>(GetAddrOfFunction(methodDecl));
-    assert(methodFuncOp && "Expected Function Operation");
+    auto methodFuncOp = GetAddrOfFunction(methodDecl);
     return builder.create<cir::ConstantOp>(
         loc, ty, builder.getMethodAttr(ty, methodFuncOp));
   }
