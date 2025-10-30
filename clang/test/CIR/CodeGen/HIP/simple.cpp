@@ -17,7 +17,7 @@
 
 // RUN: %clang_cc1 -triple=amdgcn-amd-amdhsa -x hip -fclangir \
 // RUN:            -fcuda-is-device -fhip-new-launch-api \
-// RUN:              -emit-llvm %s -o %t.cir
+// RUN:              -emit-llvm %s -o %t.ll
 // RUN: FileCheck --check-prefix=LLVM-DEVICE --input-file=%t.ll %s
 
 
@@ -35,7 +35,7 @@ __device__ void device_fn(int* a, double b, float c) {}
 
 __global__ void global_fn(int a) {}
 // CIR-DEVICE: @_Z9global_fni
-// LLVM-DEVICE: define dso_local amdgpu_kernel void @_Z9global_fni
+// LLVM-DEVICE: define dso_local void @_Z9global_fni
 
 // CIR-HOST: @_Z24__device_stub__global_fni{{.*}}extra([[Kernel]])
 // CIR-HOST: %[[#CIRKernelArgs:]] = cir.alloca {{.*}}"kernel_args"

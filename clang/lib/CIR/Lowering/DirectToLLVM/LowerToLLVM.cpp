@@ -1744,25 +1744,24 @@ mlir::LogicalResult CIRToLLVMAllocaOpLowering::matchAndRewrite(
     auto resPtrTy = mlir::cast<mlir::LLVM::LLVMPointerType>(resultTy);
     auto dlAllocaASAttr = mlir::cast_if_present<mlir::IntegerAttr>(
         dataLayout.getAllocaMemorySpace());
-    llvm::errs() << dlAllocaASAttr << "\n";
-    // Absence means 0
     // TODO: The query for the alloca AS should be done through CIRDataLayout
     // instead to reuse the logic of interpret null attr as 0.
-    unsigned dlAllocaAS = 0;
-    if (dlAllocaASAttr)
-      dlAllocaAS =
-          static_cast<unsigned>(dlAllocaASAttr.getValue().getZExtValue());
-    return dlAllocaAS;
+    if (!dlAllocaASAttr)
+      return 0u;
+    return static_cast<unsigned>(dlAllocaASAttr.getValue().getZExtValue());
   }();
 
-  auto llvmAlloca = rewriter.replaceOpWithNewOp<mlir::LLVM::AllocaOp>(
-      op, resultTy,
-      mlir::LLVM::LLVMPointerType::get(elementTy.getContext(), allocaAS), size,
-      op.getAlignmentAttr().getInt());
+  auto resPtrTy =
+      mlir::LLVM::LLVMPointerType::get(elementTy.getContext(), allocaAS);
+
+  auto llvmAlloca = rewriter.create<mlir::LLVM::AllocaOp>(
+      op.getLoc(), resPtrTy, elementTy, size, op.getAlignmentAttr().getInt());
 
   auto expectedPtrTy = mlir::cast<mlir::LLVM::LLVMPointerType>(
       getTypeConverter()->convertType(op.getResult().getType()));
+
   mlir::Value finalPtr = llvmAlloca.getResult();
+
   if (expectedPtrTy.getAddressSpace() != allocaAS) {
     finalPtr = rewriter.create<mlir::LLVM::AddrSpaceCastOp>(
         op.getLoc(), expectedPtrTy, finalPtr);
@@ -1776,6 +1775,8 @@ mlir::LogicalResult CIRToLLVMAllocaOpLowering::matchAndRewrite(
 
   if (annotations && !annotations.empty())
     buildAllocaAnnotations(llvmAlloca, adaptor, rewriter, annotations);
+  rewriter.replaceOp(op, finalPtr);
+
   return mlir::success();
 }
 
