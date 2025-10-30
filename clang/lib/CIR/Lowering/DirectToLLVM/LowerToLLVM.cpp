@@ -1740,19 +1740,32 @@ mlir::LogicalResult CIRToLLVMAllocaOpLowering::matchAndRewrite(
       convertTypeForMemory(*getTypeConverter(), dataLayout, op.getAllocaType());
   auto resultTy = getTypeConverter()->convertType(op.getType());
   // Verification between the CIR alloca AS and the one from data layout.
-  {
+  auto allocaAS = [&]() {
     auto resPtrTy = mlir::cast<mlir::LLVM::LLVMPointerType>(resultTy);
     auto dlAllocaASAttr = mlir::cast_if_present<mlir::IntegerAttr>(
         dataLayout.getAllocaMemorySpace());
+    llvm::errs() << dlAllocaASAttr << "\n";
     // Absence means 0
     // TODO: The query for the alloca AS should be done through CIRDataLayout
     // instead to reuse the logic of interpret null attr as 0.
-    auto dlAllocaAS = dlAllocaASAttr ? dlAllocaASAttr.getInt() : 0;
-    if (dlAllocaAS != resPtrTy.getAddressSpace()) {
-      return op.emitError() << "alloca address space doesn't match the one "
-                               "from the target data layout: "
-                            << dlAllocaAS;
-    }
+    unsigned dlAllocaAS = 0;
+    if (dlAllocaASAttr)
+      dlAllocaAS =
+          static_cast<unsigned>(dlAllocaASAttr.getValue().getZExtValue());
+    return dlAllocaAS;
+  }();
+
+  auto llvmAlloca = rewriter.replaceOpWithNewOp<mlir::LLVM::AllocaOp>(
+      op, resultTy,
+      mlir::LLVM::LLVMPointerType::get(elementTy.getContext(), allocaAS), size,
+      op.getAlignmentAttr().getInt());
+
+  auto expectedPtrTy = mlir::cast<mlir::LLVM::LLVMPointerType>(
+      getTypeConverter()->convertType(op.getResult().getType()));
+  mlir::Value finalPtr = llvmAlloca.getResult();
+  if (expectedPtrTy.getAddressSpace() != allocaAS) {
+    finalPtr = rewriter.create<mlir::LLVM::AddrSpaceCastOp>(
+        op.getLoc(), expectedPtrTy, finalPtr);
   }
 
   // If there are annotations available, copy them out before we destroy the
@@ -1760,9 +1773,6 @@ mlir::LogicalResult CIRToLLVMAllocaOpLowering::matchAndRewrite(
   mlir::ArrayAttr annotations;
   if (op.getAnnotations())
     annotations = op.getAnnotationsAttr();
-
-  auto llvmAlloca = rewriter.replaceOpWithNewOp<mlir::LLVM::AllocaOp>(
-      op, resultTy, elementTy, size, op.getAlignmentAttr().getInt());
 
   if (annotations && !annotations.empty())
     buildAllocaAnnotations(llvmAlloca, adaptor, rewriter, annotations);
