@@ -3208,6 +3208,7 @@ def fclangir_mem2reg : Flag<["-"], "fclangir-mem2reg">,
   HelpText<"Enable mem2reg on the flat ClangIR">,
   MarshallingInfoFlag<FrontendOpts<"ClangIREnableMem2Reg">>;
 
+def CIR_Group : OptionGroup<"<CIR options>">;
 def clangir_disable_passes : Flag<["-"], "clangir-disable-passes">,
   Visibility<[ClangOption, CC1Option]>,
   HelpText<"Disable CIR transformations pipeline">,
@@ -3256,6 +3257,16 @@ def emit_cir_only : Flag<["-"], "emit-cir-only">,
 def emit_cir_flat : Flag<["-"], "emit-cir-flat">, Visibility<[ClangOption, CC1Option]>,
   Group<Action_Group>, Alias<emit_mlir_EQ>, AliasArgs<["cir-flat"]>,
   HelpText<"Similar to -emit-cir but also lowers structured CFG into basic blocks.">;
+def cir_combine : Flag<["-"], "cir-combine">,
+  Visibility<[CC1Option]>,
+  Group<Action_Group>,
+  HelpText<"Combine host and device CIR modules into a single offload container CIR module.">;
+def cir_host_input : Separate<["-"], "cir-host-input">,
+  Visibility<[CC1Option]>, Group<CIR_Group>,
+  HelpText<"Host CIR input for -cir-combine.">;
+def cir_device_input : Separate<["-"], "cir-device-input">,
+  Visibility<[CC1Option]>, Group<CIR_Group>,
+  HelpText<"Device CIR input for -cir-combine (may be repeated).">;
 /// ClangIR-specific options - END
 
 def flto : Flag<["-"], "flto">,

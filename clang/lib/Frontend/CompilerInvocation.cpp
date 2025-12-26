@@ -2790,6 +2790,7 @@ static const auto &getFrontendActionTable() {
       {frontend::EmitCodeGenOnly, OPT_emit_codegen_only},
       {frontend::EmitObj, OPT_emit_obj},
       {frontend::ExtractAPI, OPT_extract_api},
+      {frontend::CIRCombine, OPT_cir_combine},
 
       {frontend::FixIt, OPT_fixit_EQ},
       {frontend::FixIt, OPT_fixit},
@@ -2901,6 +2902,13 @@ static void GenerateFrontendArgs(const FrontendOptions &Opts,
     };
   }
 
+  if (Opts.ProgramAction == frontend::CIRCombine) {
+    if (!Opts.CIRHostInput.empty())
+      GenerateArg(Consumer, OPT_cir_host_input, Opts.CIRHostInput);
+    if (!Opts.CIRDeviceInput.empty())
+      GenerateArg(Consumer, OPT_cir_device_input, Opts.CIRDeviceInput);
+  }
+
   if (Opts.ProgramAction == frontend::FixIt && !Opts.FixItSuffix.empty()) {
     GenerateProgramAction = [&]() {
       GenerateArg(Consumer, OPT_fixit_EQ, Opts.FixItSuffix);
@@ -3001,6 +3009,8 @@ static void GenerateFrontendArgs(const FrontendOptions &Opts,
       Lang = "assembler-with-cpp";
       break;
     case Language::Unknown:
+      if (Opts.ProgramAction == frontend::CIRCombine)
+        break;
       assert(Opts.DashX.getFormat() == InputKind::Precompiled &&
              "Generating -x argument for unknown language (not precompiled).");
       Lang = "ast";
@@ -3016,8 +3026,9 @@ static void GenerateFrontendArgs(const FrontendOptions &Opts,
       break;
     }
 
-    GenerateArg(Consumer, OPT_x,
-                Lang + HeaderUnit + Header + ModuleMap + Preprocessed);
+    if (Opts.ProgramAction != frontend::CIRCombine)
+      GenerateArg(Consumer, OPT_x,
+                  Lang + HeaderUnit + Header + ModuleMap + Preprocessed);
   }
 
   // OPT_INPUT has a unique class, generate it directly.
@@ -3173,6 +3184,37 @@ static bool ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
   if (Args.hasArg(OPT_fclangir_direct_lowering))
     Opts.ClangIRDirectLowering = true;
 
+  if (Args.hasArg(OPT_cir_combine) && !Args.hasArg(OPT_fclangir))
+    Diags.Report(diag::err_drv_argument_only_allowed_with)
+        << "-cir-combine" << "-fclangir";
+
+  if (Args.hasArg(OPT_cir_combine) &&
+      Opts.ProgramAction == frontend::CIRCombine) {
+    if (!Opts.Inputs.empty()) {
+      Diags.Report(diag::err_drv_invalid_argument_to_option)
+          << "positional inputs" << "-cir-combine";
+    }
+
+    auto HostArgs = Args.filtered(OPT_cir_host_input);
+    unsigned HostCount = std::distance(HostArgs.begin(), HostArgs.end());
+    if (HostCount == 0)
+      Diags.Report(diag::err_drv_missing_argument) << "-cir-host-input" << 1;
+    if (HostCount > 1)
+      Diags.Report(diag::err_drv_invalid_argument_to_option)
+          << "multiple -cir-host-input" << "-cir-combine";
+    Opts.CIRHostInput = Args.getLastArgValue(OPT_cir_host_input).str();
+
+    auto DevArgs = Args.filtered(OPT_cir_device_input);
+    unsigned DevCount = std::distance(DevArgs.begin(), DevArgs.end());
+    if (DevCount == 0)
+      Diags.Report(diag::err_drv_missing_argument) << "-cir-device-input" << 1;
+
+    if (DevCount > 1)
+      Diags.Report(diag::err_drv_invalid_argument_to_option)
+          << "multiple -cir-device-input" << "-cir-combine";
+    Opts.CIRDeviceInput = Args.getLastArgValue(OPT_cir_device_input).str();
+  }
+
   if (Args.hasArg(OPT_clangir_disable_passes))
     Opts.ClangIRDisablePasses = true;
 
@@ -3301,6 +3343,14 @@ static bool ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
   // '-' is the default input if none is given.
   std::vector<std::string> Inputs = Args.getAllArgValues(OPT_INPUT);
   Opts.Inputs.clear();
+  if (Opts.ProgramAction == frontend::CIRCombine) {
+    Opts.Inputs.emplace_back(
+        Opts.CIRHostInput,
+        clang::InputKind(clang::Language::CIR, clang::InputKind::Source),
+        false);
+    // CIRCombine does not require the -x flag for now. We skip this part
+    return Diags.getNumErrors() == NumErrorsBefore;
+  }
   if (Inputs.empty())
     Inputs.push_back("-");
 
@@ -4721,6 +4771,7 @@ static bool isStrictlyPreprocessorAction(frontend::ActionKind Action) {
   case frontend::ASTDump:
   case frontend::ASTPrint:
   case frontend::ASTView:
+  case frontend::CIRCombine:
   case frontend::EmitAssembly:
   case frontend::EmitBC:
   case frontend::EmitCIROnly:

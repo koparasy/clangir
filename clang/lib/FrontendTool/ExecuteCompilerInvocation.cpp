@@ -73,8 +73,16 @@ CreateFrontendBaseAction(CompilerInstance &CI) {
   case ASTView:                return std::make_unique<ASTViewAction>();
   case DumpCompilerOptions:
     return std::make_unique<DumpCompilerOptionsAction>();
-  case DumpRawTokens:          return std::make_unique<DumpRawTokensAction>();
-  case DumpTokens:             return std::make_unique<DumpTokensAction>();
+  case DumpRawTokens:
+    return std::make_unique<DumpRawTokensAction>();
+  case DumpTokens:
+    return std::make_unique<DumpTokensAction>();
+  case CIRCombine:
+#if CLANG_ENABLE_CIR
+    return std::make_unique<cir::CIRCombineAction>();
+#else
+    llvm_unreachable("CIR suppport not built into clang");
+#endif
   case EmitAssembly:
 #if CLANG_ENABLE_CIR
     if (UseCIR)

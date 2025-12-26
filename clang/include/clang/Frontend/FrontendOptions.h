@@ -68,6 +68,10 @@ enum ActionKind {
   /// Generate CIR, bud don't emit anything.
   EmitCIROnly,
 
+  /// Combine multiple CIR modules (e.g. host and device) into a single
+  /// container
+  CIRCombine,
+
   /// Emit a .mlir file
   EmitMLIR,
 
@@ -454,6 +458,8 @@ public:
   std::string ClangIRIdiomRecognizerOpts;
   std::string ClangIRLibOptOpts;
   std::string ClangIRFile;
+  std::string CIRHostInput;
+  std::string CIRDeviceInput;
 
   frontend::MLIRDialectKind MLIRTargetDialect = frontend::MLIR_CORE;
 
