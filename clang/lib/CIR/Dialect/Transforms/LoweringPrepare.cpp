@@ -1830,8 +1830,7 @@ void LoweringPreparePass::runOnOp(Operation *op) {
     if (auto attr = fnOp.getExtraAttrs().getElements().get(
             CUDAKernelNameAttr::getMnemonic())) {
       auto cudaBinaryAttr = dyn_cast<CUDAKernelNameAttr>(attr);
-      std::string kernelName = cudaBinaryAttr.getKernelName();
-      cudaKernelMap[kernelName] = fnOp;
+      cudaKernelMap[cudaBinaryAttr.getKernelName()] = fnOp;
     }
     if (std::optional<mlir::ArrayAttr> annotations = fnOp.getAnnotations())
       addGlobalAnnotations(fnOp, annotations.value());

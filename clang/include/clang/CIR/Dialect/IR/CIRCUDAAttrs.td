@@ -30,7 +30,7 @@ def CIR_CUDAKernelNameAttr : CIR_Attr<"CUDAKernelName", "cu.kernel_name"> {
     names, we must record the corresponding device-side name for a stub.
   }];
 
-  let parameters = (ins "std::string":$kernel_name);
+  let parameters = (ins StringRefParameter<"">:$kernel_name);
   let assemblyFormat = "`<` $kernel_name `>`";
 }
 

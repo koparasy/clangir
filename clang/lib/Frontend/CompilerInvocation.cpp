@@ -3204,6 +3204,9 @@ static bool ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
           << "multiple -cir-host-input" << "-cir-combine";
     Opts.CIRHostInput = Args.getLastArgValue(OPT_cir_host_input).str();
 
+    if (!llvm::sys::fs::exists(Opts.CIRHostInput))
+      Diags.Report(diag::err_drv_no_such_file) << Opts.CIRHostInput;
+
     auto DevArgs = Args.filtered(OPT_cir_device_input);
     unsigned DevCount = std::distance(DevArgs.begin(), DevArgs.end());
     if (DevCount == 0)
@@ -3213,6 +3216,10 @@ static bool ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
       Diags.Report(diag::err_drv_invalid_argument_to_option)
           << "multiple -cir-device-input" << "-cir-combine";
     Opts.CIRDeviceInput = Args.getLastArgValue(OPT_cir_device_input).str();
+    if (!llvm::sys::fs::exists(Opts.CIRDeviceInput))
+      Diags.Report(diag::err_drv_no_such_file) << Opts.CIRDeviceInput;
+    if (Args.hasArg(OPT_cir_combine) && !Args.getLastArg(OPT_o))
+      Diags.Report(diag::err_drv_missing_argument) << "-o" << 1;
   }
 
   if (Args.hasArg(OPT_clangir_disable_passes))

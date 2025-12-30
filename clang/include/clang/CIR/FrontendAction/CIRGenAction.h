@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_CLANG_CIR_CIRGENACTION_H
-#define LLVM_CLANG_CIR_CIRGENACTION_H
+#ifndef LLVM_CLANG_CIR_CIRCOMBINEACTION_H
+#define LLVM_CLANG_CIR_CIRCOMBINEACTION_H
 
 #include "clang/CodeGen/CodeGenAction.h"
 #include "clang/Frontend/FrontendAction.h"
@@ -111,23 +111,6 @@ class EmitObjAction : public CIRGenAction {
 
 public:
   EmitObjAction(mlir::MLIRContext *mlirCtx = nullptr);
-};
-
-class CIRCombineAction : public clang::FrontendAction {
-public:
-  std::unique_ptr<clang::ASTConsumer>
-  CreateASTConsumer(clang::CompilerInstance &CI,
-                    llvm::StringRef InFile) override {
-    return std::make_unique<clang::ASTConsumer>();
-  }
-
-  void ExecuteAction() override {
-    llvm::report_fatal_error("CIRCombineAction NIY");
-  }
-
-  // We don't need a preprocessor-only mode.
-  bool usesPreprocessorOnly() const override { return false; }
-  virtual bool hasCIRSupport() const override { return true; }
 };
 
 // Used for -fclangir-analysis-only: use CIR analysis but still use original

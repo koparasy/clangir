@@ -2643,6 +2643,49 @@ LogicalResult cir::VTTAddrPointOp::verify() {
 }
 
 //===----------------------------------------------------------------------===//
+// Offload container
+//===----------------------------------------------------------------------===//
+
+std::optional<mlir::ModuleOp> cir::OffloadContainerOp::getHostModule() {
+  if (getBody().empty())
+    return std::nullopt;
+
+  for (mlir::Operation &op : getBody().front()) {
+    auto mod = llvm::dyn_cast<mlir::ModuleOp>(op);
+    if (!mod)
+      continue;
+    if (auto name = mod.getSymNameAttr(); name && name.getValue() == "host")
+      return mod;
+  }
+  return std::nullopt;
+}
+
+std::optional<mlir::ModuleOp> cir::OffloadContainerOp::getDeviceModule() {
+  if (getBody().empty())
+    return std::nullopt;
+
+  for (mlir::Operation &op : getBody().front()) {
+    auto mod = llvm::dyn_cast<mlir::ModuleOp>(op);
+    if (!mod)
+      continue;
+    if (auto name = mod.getSymNameAttr(); name && name.getValue() == "device")
+      return mod;
+  }
+  return std::nullopt;
+}
+
+mlir::LogicalResult cir::OffloadContainerOp::verify() {
+  auto host = getHostModule();
+  auto dev = getDeviceModule();
+
+  if (!host)
+    return emitOpError() << "expects nested module @host";
+  if (!dev)
+    return emitOpError() << "expects nested module @device";
+  return mlir::success();
+}
+
+//===----------------------------------------------------------------------===//
 // FuncOp
 //===----------------------------------------------------------------------===//
 
