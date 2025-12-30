@@ -2907,6 +2907,13 @@ static void GenerateFrontendArgs(const FrontendOptions &Opts,
       GenerateArg(Consumer, OPT_cir_host_input, Opts.CIRHostInput);
     if (!Opts.CIRDeviceInput.empty())
       GenerateArg(Consumer, OPT_cir_device_input, Opts.CIRDeviceInput);
+    if (Opts.EmitSplit) {
+      GenerateArg(Consumer, OPT_cir_emit_split);
+      if (!Opts.CIRHostOutput.empty())
+        GenerateArg(Consumer, OPT_cir_host_output, Opts.CIRHostOutput);
+      if (!Opts.CIRDeviceOutput.empty())
+        GenerateArg(Consumer, OPT_cir_device_output, Opts.CIRDeviceOutput);
+    }
   }
 
   if (Opts.ProgramAction == frontend::FixIt && !Opts.FixItSuffix.empty()) {
@@ -3195,31 +3202,42 @@ static bool ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
           << "positional inputs" << "-cir-combine";
     }
 
-    auto HostArgs = Args.filtered(OPT_cir_host_input);
-    unsigned HostCount = std::distance(HostArgs.begin(), HostArgs.end());
-    if (HostCount == 0)
-      Diags.Report(diag::err_drv_missing_argument) << "-cir-host-input" << 1;
-    if (HostCount > 1)
-      Diags.Report(diag::err_drv_invalid_argument_to_option)
-          << "multiple -cir-host-input" << "-cir-combine";
-    Opts.CIRHostInput = Args.getLastArgValue(OPT_cir_host_input).str();
+    auto reqSingleInput = [&](llvm::opt::OptSpecifier Option, StringRef Name) {
+      auto args = Args.filtered(Option);
+      unsigned count = std::distance(args.begin(), args.end());
+      if (count == 0)
+        Diags.Report(diag::err_drv_missing_argument) << Name << 1;
+      if (count > 1)
+        Diags.Report(diag::err_drv_invalid_argument_to_option)
+            << Twine("multiple ", Name).str() << "-cir-combine";
+      return Args.getLastArgValue(Option).str();
+    };
+
+    Opts.CIRHostInput = reqSingleInput(OPT_cir_host_input, "-cir-host-input");
 
     if (!llvm::sys::fs::exists(Opts.CIRHostInput))
       Diags.Report(diag::err_drv_no_such_file) << Opts.CIRHostInput;
 
-    auto DevArgs = Args.filtered(OPT_cir_device_input);
-    unsigned DevCount = std::distance(DevArgs.begin(), DevArgs.end());
-    if (DevCount == 0)
-      Diags.Report(diag::err_drv_missing_argument) << "-cir-device-input" << 1;
+    Opts.CIRDeviceInput =
+        reqSingleInput(OPT_cir_device_input, "-cir-device-input");
 
-    if (DevCount > 1)
-      Diags.Report(diag::err_drv_invalid_argument_to_option)
-          << "multiple -cir-device-input" << "-cir-combine";
-    Opts.CIRDeviceInput = Args.getLastArgValue(OPT_cir_device_input).str();
     if (!llvm::sys::fs::exists(Opts.CIRDeviceInput))
       Diags.Report(diag::err_drv_no_such_file) << Opts.CIRDeviceInput;
-    if (Args.hasArg(OPT_cir_combine) && !Args.getLastArg(OPT_o))
-      Diags.Report(diag::err_drv_missing_argument) << "-o" << 1;
+
+    if (!Args.hasArg(OPT_cir_emit_split)) {
+      if (!Args.hasArg(OPT_cir_combine) && !Args.getLastArg(OPT_o))
+        Diags.Report(diag::err_drv_missing_argument) << "-o" << 1;
+    } else {
+      if (Args.hasArg(OPT_cir_combine) && Args.getLastArg(OPT_o))
+        Diags.Report(diag::warn_drv_unsupported_option_overrides_option)
+            << "-o" << "-cir-emit-split";
+
+      Opts.EmitSplit = true;
+      Opts.CIRHostOutput =
+          reqSingleInput(OPT_cir_host_output, "-cir-host-output");
+      Opts.CIRDeviceOutput =
+          reqSingleInput(OPT_cir_device_output, "-cir-device-output");
+    }
   }
 
   if (Args.hasArg(OPT_clangir_disable_passes))

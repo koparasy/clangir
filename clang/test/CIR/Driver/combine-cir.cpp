@@ -27,7 +27,7 @@
 // RUN:   -cir-device-input %t/device.cir 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=NO_O
 //
-// NO_O: error: argument to '-o' is missing (expected 1 value)
+// NO_O: error: missing argument to '-o'
 
 //------------------------------------------------------------------------------
 // Missing host input
@@ -91,3 +91,48 @@
 //
 // NO_SUCH_DEVICE: error: no such file or directory:
 
+//------------------------------------------------------------------------------
+// CIR split outputs to host/device 
+//------------------------------------------------------------------------------
+// RUN: %clang_cc1 -fclangir -cir-combine -cir-emit-split \
+// RUN:   -cir-host-input %t/host.cir \
+// RUN:   -cir-device-input %t/device.cir \
+// RUN:   -cir-host-output %t/host.out.cir \
+// RUN:   -cir-device-output %t/device.out.cir
+// RUN: test -f %t/host.out.cir
+// RUN: test -f %t/device.out.cir
+
+//------------------------------------------------------------------------------
+// CIR split outputs missing device output 
+//------------------------------------------------------------------------------
+// RUN: not %clang_cc1 -fclangir -cir-combine -cir-emit-split \
+// RUN:   -cir-host-input %t/host.cir \
+// RUN:   -cir-device-input %t/device.cir \
+// RUN:   -cir-host-output %t/host.out.cir 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=SPLIT_MISSING_DEVOUT
+// SPLIT_MISSING_DEVOUT: error: argument to '-cir-device-output' is missing (expected 1 value)
+
+
+//------------------------------------------------------------------------------
+// CIR split outputs missing host output 
+//------------------------------------------------------------------------------
+// RUN: not %clang_cc1 -fclangir -cir-combine -cir-emit-split \
+// RUN:   -cir-host-input %t/host.cir \
+// RUN:   -cir-device-input %t/device.cir \
+// RUN:   -cir-device-output %t/device.out.cir 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=SPLIT_MISSING_HOSTOUT
+// SPLIT_MISSING_HOSTOUT: error: argument to '-cir-host-output' is missing (expected 1 value)
+
+
+//------------------------------------------------------------------------------
+// CIR split outputs to host/device, pass unused '-o'
+//------------------------------------------------------------------------------
+// RUN: %clang_cc1 -fclangir -cir-combine -cir-emit-split \
+// RUN:   -cir-host-input %t/host.cir -o %t/out.cir \
+// RUN:   -cir-device-input %t/device.cir \
+// RUN:   -cir-host-output %t/host.out.cir \
+// RUN:   -cir-device-output %t/device.out.cir 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=EXTRA_OUT
+// RUN: test -f %t/host.out.cir
+// RUN: test -f %t/device.out.cir
+// EXTRA_OUT: warning: ignoring '-o' option as option '-cir-emit-split' overrides the behavior

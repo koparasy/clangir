@@ -3267,6 +3267,15 @@ def cir_host_input : Separate<["-"], "cir-host-input">,
 def cir_device_input : Separate<["-"], "cir-device-input">,
   Visibility<[CC1Option]>, Group<CIR_Group>,
   HelpText<"Device CIR input for -cir-combine (may be repeated).">;
+def cir_emit_split : Flag<["-"], "cir-emit-split">,
+  Visibility<[CC1Option]>, Group<CIR_Group>,
+  HelpText<"Emit split host/device CIR instead of a combined CIR container">;
+def cir_host_output : Separate<["-"], "cir-host-output">,
+  Visibility<[CC1Option]>, Group<CIR_Group>,
+  HelpText<"Output path for host CIR when -cir-emit-split is used">;
+def cir_device_output : Separate<["-"], "cir-device-output">,
+  Visibility<[CC1Option]>, Group<CIR_Group>,
+  HelpText<"Output path for device CIR when -cir-emit-split is used">;
 /// ClangIR-specific options - END
 
 def flto : Flag<["-"], "flto">,

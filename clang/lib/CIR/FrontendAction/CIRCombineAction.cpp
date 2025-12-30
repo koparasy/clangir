@@ -39,10 +39,15 @@ void CIRCombineAction::ExecuteAction() {
     return;
   }
 
-  if (Fo.OutputFile.empty()) {
-    Diags.Report(clang::diag::err_drv_missing_arg_mtp)
-        << "missing -o for -cir-combine";
+  if (!Fo.EmitSplit && Fo.OutputFile.empty()) {
+    Diags.Report(clang::diag::err_drv_missing_arg_mtp) << "-o";
     return;
+  } else if (Fo.EmitSplit) {
+    if (Fo.CIRHostOutput.empty())
+      Diags.Report(clang::diag::err_drv_missing_arg_mtp) << "-cir-host-output";
+    if (Fo.CIRDeviceOutput.empty())
+      Diags.Report(clang::diag::err_drv_missing_arg_mtp)
+          << "-cir-device-output";
   }
 
   mlirContext->getOrLoadDialect<mlir::BuiltinDialect>();
@@ -118,19 +123,31 @@ void CIRCombineAction::ExecuteAction() {
   // (Cloning is simplest/robust for PR2.)
   IB.insert(HostCirModule->getOperation()->clone());
   IB.insert(DeviceCirModule->getOperation()->clone());
-  {
+  auto EmitCIR = [&](mlir::ModuleOp &mOp, StringRef Output) {
     mlir::OpPrintingFlags Flags;
     Flags.enableDebugInfo(/*enable=*/true, /*prettyForm=*/true);
 
     std::error_code EC;
-    llvm::raw_fd_ostream OS(Fo.OutputFile, EC, llvm::sys::fs::OF_Text);
+    llvm::raw_fd_ostream OS(Output, EC, llvm::sys::fs::OF_Text);
 
     if (EC) {
-      Diags.Report(clang::diag::err_fe_error_opening)
-          << Fo.OutputFile << EC.message();
+      Diags.Report(clang::diag::err_fe_error_opening) << Output << EC.message();
       return;
     }
 
-    Combined.print(OS, Flags);
+    mOp.print(OS, Flags);
+  };
+
+  if (!Fo.EmitSplit) {
+    EmitCIR(Combined, Fo.OutputFile);
+    return;
   }
+  auto devModOr = Container.getDeviceModule();
+  if (!devModOr)
+    Container.emitError("missing device module in offload container");
+  EmitCIR(*devModOr, Fo.CIRDeviceOutput);
+  auto hostModOr = Container.getHostModule();
+  if (!hostModOr)
+    Container.emitError("missing host module in offload container");
+  EmitCIR(*hostModOr, Fo.CIRHostOutput);
 }

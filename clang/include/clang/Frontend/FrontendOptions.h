@@ -460,6 +460,9 @@ public:
   std::string ClangIRFile;
   std::string CIRHostInput;
   std::string CIRDeviceInput;
+  bool EmitSplit;
+  std::string CIRHostOutput;
+  std::string CIRDeviceOutput;
 
   frontend::MLIRDialectKind MLIRTargetDialect = frontend::MLIR_CORE;
 
@@ -593,7 +596,7 @@ public:
         ClangIRVerifyDiags(false), ClangIRLifetimeCheck(false),
         ClangIRIdiomRecognizer(false), ClangIRLibOpt(false),
         ClangIRCallConvLowering(true), ClangIREnableMem2Reg(false),
-        ClangIRAnalysisOnly(false), EmitClangIRFile(false),
+        ClangIRAnalysisOnly(false), EmitClangIRFile(false), EmitSplit(false),
         TimeTraceGranularity(500), TimeTraceVerbose(false) {}
 
   /// getInputKindForExtension - Return the appropriate input kind for a file
