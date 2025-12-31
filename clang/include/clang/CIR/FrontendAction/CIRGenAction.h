@@ -49,8 +49,6 @@ private:
 
   mlir::MLIRContext *mlirContext;
 
-  mlir::OwningOpRef<mlir::ModuleOp> loadModule(llvm::MemoryBufferRef mbRef);
-
 protected:
   CIRGenAction(OutputType action, mlir::MLIRContext *_MLIRContext = nullptr);
 
