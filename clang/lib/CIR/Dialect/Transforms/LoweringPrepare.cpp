@@ -1014,7 +1014,7 @@ void LoweringPreparePass::buildCUDAModuleCtor() {
       assert(!cir::MissingFeatures::hipModuleCtor());
     return;
   }
-  std::string cudaGPUBinaryName =
+  llvm::StringRef cudaGPUBinaryName =
       cast<CUDABinaryHandleAttr>(cudaBinaryHandleAttr).getName();
 
   constexpr unsigned cudaFatMagic = 0x466243b1;
