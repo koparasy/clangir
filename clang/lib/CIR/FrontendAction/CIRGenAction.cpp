@@ -7,6 +7,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "clang/CIR/FrontendAction/CIRGenAction.h"
+#include "mlir/Bytecode/BytecodeReader.h"
+#include "mlir/Bytecode/BytecodeWriter.h"
 #include "mlir/Dialect/DLTI/DLTI.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
@@ -241,6 +243,18 @@ public:
     }
   }
 
+  mlir::LogicalResult writeModuleBytecode(mlir::Operation *op,
+                                          raw_ostream &os) {
+    // If you have a ModuleOp, pass module.getOperation().
+    // writeBytecodeToFile takes an Operation* and a raw_ostream.
+    if (mlir::failed(mlir::writeBytecodeToFile(op, os))) {
+      return mlir::failure();
+    }
+
+    os.flush();
+    return mlir::success();
+  }
+
   void GenerateOutput(mlir::ModuleOp MlirMod,
                       std::unique_ptr<mlir::MLIRContext> MlirCtx) {
     bool EmitCIR = LangOpts.EmitCIRToFile || FeOptions.EmitClangIRFile ||
@@ -287,12 +301,8 @@ public:
       assert(MlirMod &&
              "MLIR module does not exist, but lowering did not fail?");
       assert(OutputStream && "Why are we here without an output stream?");
-      // FIXME: we cannot roundtrip prettyForm=true right now.
-      mlir::OpPrintingFlags Flags;
-      Flags.enableDebugInfo(/*enable=*/true, /*prettyForm=*/false);
-      if (!Verify)
-        Flags.assumeVerified();
-      MlirMod->print(*OutputStream, Flags);
+      // FIXME: Think of a better error handling mechanism
+      (void)writeModuleBytecode(MlirMod, *OutputStream);
     };
 
     switch (Action) {
@@ -537,12 +547,14 @@ CIRGenAction::CreateASTConsumer(CompilerInstance &Ci, StringRef InputFile) {
 }
 
 static mlir::FailureOr<mlir::OwningOpRef<mlir::ModuleOp>>
-loadModule(llvm::MemoryBufferRef MbRef, mlir::MLIRContext &mlirContext) {
-  auto Module =
-      mlir::parseSourceString<mlir::ModuleOp>(MbRef.getBuffer(), &mlirContext);
-  if (!Module)
+loadModule(std::unique_ptr<llvm::MemoryBuffer> buf,
+           mlir::MLIRContext &mlirContext) {
+  llvm::SourceMgr sm;
+  sm.AddNewSourceBuffer(std::move(buf), llvm::SMLoc());
+  auto module = mlir::parseSourceFile<mlir::ModuleOp>(sm, &mlirContext);
+  if (!module)
     return mlir::failure();
-  return Module;
+  return module;
 }
 
 void CIRGenAction::ExecuteAction() {
@@ -577,18 +589,13 @@ void CIRGenAction::ExecuteAction() {
   cgConsumer = Result.get();
 
   std::unique_ptr<mlir::MLIRContext> MlirContext{new mlir::MLIRContext};
-  MlirContext->getOrLoadDialect<mlir::BuiltinDialect>();
-  MlirContext->getOrLoadDialect<mlir::LLVM::LLVMDialect>();
   MlirContext->getOrLoadDialect<mlir::DLTIDialect>();
-  MlirContext->getOrLoadDialect<cir::CIRDialect>();
   MlirContext->getOrLoadDialect<mlir::func::FuncDialect>();
+  MlirContext->getOrLoadDialect<cir::CIRDialect>();
+  MlirContext->getOrLoadDialect<mlir::LLVM::LLVMDialect>();
   MlirContext->getOrLoadDialect<mlir::memref::MemRefDialect>();
-  MlirContext->getOrLoadDialect<mlir::arith::ArithDialect>();
   MlirContext->getOrLoadDialect<mlir::omp::OpenMPDialect>();
 
-  // TODO: unwrap this -- this exists because including the `OwningModuleRef` in
-  // CIRGenAction's header would require linking the Frontend against MLIR.
-  // Let's avoid that for now.
   llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> InputOrErr =
       Ci.getFileManager().getBufferForFile(InputFile);
   if (!InputOrErr) {
@@ -599,7 +606,7 @@ void CIRGenAction::ExecuteAction() {
   }
   std::unique_ptr<llvm::MemoryBuffer> InputBuf = std::move(*InputOrErr);
 
-  auto MlirModuleOr = loadModule(*InputBuf, *MlirContext);
+  auto MlirModuleOr = loadModule(std::move(InputBuf), *MlirContext);
 
   if (mlir::failed(MlirModuleOr)) {
     Diags.Report(clang::diag::err_fe_error_reading)

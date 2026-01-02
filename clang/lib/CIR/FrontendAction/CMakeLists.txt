@@ -37,4 +37,6 @@ add_clang_library(clangCIRFrontendAction
   MLIRTransforms
   MLIRSupport
   MLIRMemRefDialect
+  MLIRBytecodeWriter
+  MLIRBytecodeReader
   )
