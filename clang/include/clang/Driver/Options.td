@@ -3156,6 +3156,13 @@ defm clangir : BoolFOption<"clangir",
   PosFlag<SetTrue, [], [ClangOption, CC1Option], "Use the ClangIR pipeline to compile">,
   NegFlag<SetFalse, [], [ClangOption, CC1Option], "Use the AST -> LLVM pipeline to compile">,
   BothFlags<[], [ClangOption, CC1Option], "">>;
+defm clangir_offload : BoolFOption<"clangir-offload",
+  FrontendOpts<"UseClangIROffloadPipeline">, DefaultFalse,
+  PosFlag<SetTrue, [], [ClangOption, CC1Option],
+          "Use the ClangIR-based offload compilation pipeline">,
+  NegFlag<SetFalse, [], [ClangOption, CC1Option],
+          "Disable the ClangIR-based offload compilation pipeline">,
+  BothFlags<[], [ClangOption, CC1Option], "">>;
 def fcir_output_EQ : Joined<["-"], "fcir-output=">, Group<f_Group>,
   Visibility<[ClangOption, CC1Option]>,
   Flags<[NoArgumentUnused]>,

@@ -417,6 +417,11 @@ public:
   LLVM_PREFERRED_TYPE(bool)
   unsigned UseClangIRPipeline : 1;
 
+  /// Use CIR-based offload pipeline (combine/split/fatbin/embed) when compiling
+  /// offload code.
+  LLVM_PREFERRED_TYPE(bool)
+  unsigned UseClangIROffloadPipeline : 1;
+
   /// Lower directly from ClangIR to LLVM
   unsigned ClangIRDirectLowering : 1;
 
@@ -540,7 +545,6 @@ public:
   /// A list of arguments to forward to MLIR's option processing; this
   /// should only be used for debugging and experimental features.
   std::vector<std::string> MLIRArgs;
-
 
   /// File name of the file that will provide record layouts
   /// (in the format produced by -fdump-record-layouts).

@@ -76,6 +76,8 @@ public:
     StaticLibJobClass,
     BinaryAnalyzeJobClass,
     BinaryTranslatorJobClass,
+    CIRCombineJobClass,
+    CIRSplitJobClass,
     ObjcopyJobClass,
 
     JobClassFirst = PreprocessJobClass,
@@ -180,8 +182,7 @@ public:
   /// files for each offloading kind. By default, no prefix is used for
   /// non-device kinds, except if \a CreatePrefixForHost is set.
   static std::string
-  GetOffloadingFileNamePrefix(OffloadKind Kind,
-                              StringRef NormalizedTriple,
+  GetOffloadingFileNamePrefix(OffloadKind Kind, StringRef NormalizedTriple,
                               bool CreatePrefixForHost = false);
 
   /// Return a string containing a offload kind name.
@@ -242,9 +243,7 @@ public:
   void setId(StringRef _Id) { Id = _Id.str(); }
   StringRef getId() const { return Id; }
 
-  static bool classof(const Action *A) {
-    return A->getKind() == InputClass;
-  }
+  static bool classof(const Action *A) { return A->getKind() == InputClass; }
 };
 
 class BindArchAction : public Action {
@@ -259,9 +258,7 @@ public:
 
   StringRef getArchName() const { return ArchName; }
 
-  static bool classof(const Action *A) {
-    return A->getKind() == BindArchClass;
-  }
+  static bool classof(const Action *A) { return A->getKind() == BindArchClass; }
 };
 
 /// An offload action combines host or/and device actions according to the
@@ -407,8 +404,7 @@ protected:
 
 public:
   static bool classof(const Action *A) {
-    return (A->getKind() >= JobClassFirst &&
-            A->getKind() <= JobClassLast);
+    return (A->getKind() >= JobClassFirst && A->getKind() <= JobClassLast);
   }
 };
 
@@ -511,9 +507,7 @@ class LinkJobAction : public JobAction {
 public:
   LinkJobAction(ActionList &Inputs, types::ID Type);
 
-  static bool classof(const Action *A) {
-    return A->getKind() == LinkJobClass;
-  }
+  static bool classof(const Action *A) { return A->getKind() == LinkJobClass; }
 };
 
 class LipoJobAction : public JobAction {
@@ -522,9 +516,7 @@ class LipoJobAction : public JobAction {
 public:
   LipoJobAction(ActionList &Inputs, types::ID Type);
 
-  static bool classof(const Action *A) {
-    return A->getKind() == LipoJobClass;
-  }
+  static bool classof(const Action *A) { return A->getKind() == LipoJobClass; }
 };
 
 class DsymutilJobAction : public JobAction {
@@ -641,6 +633,32 @@ public:
 
   static bool classof(const Action *A) {
     return A->getKind() == OffloadPackagerJobClass;
+  }
+};
+
+class CombineCIRJobAction : public JobAction {
+  void anchor() override;
+  Action *HostAction;
+  Action *DeviceAction;
+
+public:
+  CombineCIRJobAction(Action *Host, Action *Device, types::ID Type);
+
+  static bool classof(const Action *A) {
+    return A->getKind() == CIRCombineJobClass;
+  }
+};
+
+class SplitCIRJobAction : public JobAction {
+  bool isHost;
+  void anchor() override;
+
+public:
+  SplitCIRJobAction(Action *Input, bool isHost, types::ID Type,
+                    OffloadKind Kind = OFK_None);
+
+  static bool classof(const Action *A) {
+    return A->getKind() == CIRSplitJobClass;
   }
 };
 
