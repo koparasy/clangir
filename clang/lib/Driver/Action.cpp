@@ -86,6 +86,13 @@ void Action::propagateDeviceOffloadInfo(OffloadKind OKind, const char *OArch,
     return;
   llvm::errs() << "OffloadingDeviceKind is " << OKind << " "
                << OffloadingDeviceKind << "\n";
+  if (isa<CombineCIRJobAction>((Action *)this)) {
+    llvm::errs() << "This is a combineCirJobAction\n";
+  } else if (isa<SplitCIRJobAction>((Action *)this)) {
+    llvm::errs() << "Is splitCIR JOB action:"
+                 << ((SplitCIRJobAction *)(this))->isHost << "\n";
+  }
+  llvm::errs() << getClassName() << "\n";
   assert((OffloadingDeviceKind == OKind || OffloadingDeviceKind == OFK_None) &&
          "Setting device kind to a different device??");
   assert(!ActiveOffloadKindMask && "Setting a device kind in a host action??");
@@ -100,6 +107,9 @@ void Action::propagateDeviceOffloadInfo(OffloadKind OKind, const char *OArch,
 void Action::propagateHostOffloadInfo(unsigned OKinds, const char *OArch) {
   // Offload action set its own kinds on their dependences.
   if (Kind == OffloadClass)
+    return;
+
+  if (Kind == CIRCombineJobClass || Kind == CIRSplitJobClass)
     return;
 
   assert(OffloadingDeviceKind == OFK_None &&
@@ -474,7 +484,7 @@ CombineCIRJobAction::CombineCIRJobAction(Action *Host, Action *Device,
     : JobAction(CIRCombineJobClass, {Device}, Type), HostAction(Host),
       DeviceAction(Device) {
 
-  OffloadingDeviceKind = OFK_Host;
+  OffloadingDeviceKind = OFK_None;
 }
 
 void SplitCIRJobAction::anchor() {}

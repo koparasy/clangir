@@ -650,10 +650,10 @@ public:
 };
 
 class SplitCIRJobAction : public JobAction {
-  bool isHost;
   void anchor() override;
 
 public:
+  bool isHost;
   SplitCIRJobAction(Action *Input, bool isHost, types::ID Type,
                     OffloadKind Kind = OFK_None);
 
