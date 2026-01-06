@@ -81,18 +81,13 @@ void Action::propagateDeviceOffloadInfo(OffloadKind OKind, const char *OArch,
   // Offload action set its own kinds on their dependences.
   if (Kind == OffloadClass)
     return;
+  if (Kind == CIRCombineJobClass || Kind == CIRSplitJobClass)
+    return;
+
   // Unbundling actions use the host kinds.
   if (Kind == OffloadUnbundlingJobClass)
     return;
-  llvm::errs() << "OffloadingDeviceKind is " << OKind << " "
-               << OffloadingDeviceKind << "\n";
-  if (isa<CombineCIRJobAction>((Action *)this)) {
-    llvm::errs() << "This is a combineCirJobAction\n";
-  } else if (isa<SplitCIRJobAction>((Action *)this)) {
-    llvm::errs() << "Is splitCIR JOB action:"
-                 << ((SplitCIRJobAction *)(this))->isHost << "\n";
-  }
-  llvm::errs() << getClassName() << "\n";
+
   assert((OffloadingDeviceKind == OKind || OffloadingDeviceKind == OFK_None) &&
          "Setting device kind to a different device??");
   assert(!ActiveOffloadKindMask && "Setting a device kind in a host action??");
@@ -245,7 +240,6 @@ OffloadAction::OffloadAction(const DeviceDependences &DDeps, types::ID Ty)
 
   // Propagate info to the dependencies.
   for (unsigned i = 0, e = getInputs().size(); i != e; ++i) {
-    llvm::errs() << "Calling " << getInputs()[i]->getClassName() << "\n";
     getInputs()[i]->propagateDeviceOffloadInfo(OKinds[i], BArchs[i], OTCs[i]);
   }
 }
@@ -481,10 +475,18 @@ void CombineCIRJobAction::anchor() {}
 
 CombineCIRJobAction::CombineCIRJobAction(Action *Host, Action *Device,
                                          types::ID Type)
-    : JobAction(CIRCombineJobClass, {Device}, Type), HostAction(Host),
+    : JobAction(CIRCombineJobClass, {Host, Device}, Type), HostAction(Host),
       DeviceAction(Device) {
 
   OffloadingDeviceKind = OFK_None;
+
+  // Propagate info to the dependencies.
+  // NOTE: THIS IS LIKELY THE LAST STEP OF MAKING THE -print-passes-work
+  // properly. I need to extent the constructors and get access to the
+  // toolchains
+  Device->propagateDeviceOffloadInfo(
+      Device->getOffloadingDeviceKind(), nullptr,
+      C.getSingleOffloadToolChain<Action::OFK_HIP>);
 }
 
 void SplitCIRJobAction::anchor() {}

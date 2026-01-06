@@ -3872,8 +3872,15 @@ class OffloadingActionBuilder final {
         A = C.MakeAction<SplitCIRJobAction>(CirCombineAction, false,
                                             types::TY_CIR,
                                             A->getOffloadingDeviceKind());
-        HostAction = C.MakeAction<SplitCIRJobAction>(CirCombineAction, true,
-                                                     types::TY_CIR);
+        auto *tmp = C.MakeAction<SplitCIRJobAction>(
+            CirCombineAction, true, types::TY_CIR,
+            Action::OffloadKind::OFK_None);
+        tmp->setHostOffloadInfo(HostAction->getOffloadingHostActiveKinds(),
+                                HostAction->getOffloadingArch());
+        llvm::errs() << "Host Action Offloading Arch: "
+                     << HostAction->getOffloadingHostActiveKinds() << " '"
+                     << HostAction->getOffloadingArch() << "'\n";
+        HostAction = tmp;
       }
     }
   };
@@ -3968,13 +3975,32 @@ public:
       // In principle a single CIR file should be able to represent all of them.
       // However backend action may need to invoke toolchains in some other way.
       // I need to investigate this and act accordingly here.
-      //
+      unsigned ActiveOffloadKinds = 0u;
+      for (auto &I : InputArgToOffloadKindMap)
+        ActiveOffloadKinds |= I.second;
+
       for (auto *SB : SpecializedBuilders) {
         if (!SB->isValid())
           continue;
         if (!SB->hasCIRCombineSupport())
           continue;
+
+        HostAction->setHostOffloadInfo(ActiveOffloadKinds,
+                                       /*BoundArch=*/nullptr);
+        for (auto *A : HostAction->inputs()) {
+          auto ArgLoc = HostActionToInputArgMap.find(A);
+          if (ArgLoc == HostActionToInputArgMap.end())
+            continue;
+          auto OFKLoc = InputArgToOffloadKindMap.find(ArgLoc->second);
+          if (OFKLoc == InputArgToOffloadKindMap.end())
+            continue;
+          A->propagateHostOffloadInfo(OFKLoc->second, /*BoundArch=*/nullptr);
+        }
+
         SB->addCIRCombineActions(HostAction);
+
+        HostAction->setHostOffloadInfo(ActiveOffloadKinds,
+                                       /*BoundArch=*/nullptr);
       }
     }
 
@@ -6142,6 +6168,7 @@ InputInfoList Driver::BuildJobsForActionNoCache(
     std::string OffloadingPrefix = Action::GetOffloadingFileNamePrefix(
         A->getOffloadingDeviceKind(), EffectiveTriple.normalize(),
         /*CreatePrefixForHost=*/isa<OffloadPackagerJobAction>(A) ||
+            /*CreatePrefixForHost=*/isa<SplitCIRJobAction>(A) ||
             !(A->getOffloadingHostActiveKinds() == Action::OFK_None ||
               AtTopLevel));
     Result =
