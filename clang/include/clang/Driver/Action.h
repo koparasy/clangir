@@ -638,15 +638,33 @@ public:
 
 class CombineCIRJobAction : public JobAction {
   void anchor() override;
+  const ToolChain *HostToolChain;
+  const ToolChain *DeviceToolChain;
   Action *HostAction;
   Action *DeviceAction;
+  char *HostBoundArch;
+  const char *DeviceBoundArch;
+  unsigned HostOffloadKind;
 
 public:
-  CombineCIRJobAction(Action *Host, Action *Device, types::ID Type);
+  CombineCIRJobAction(const ToolChain *HostToolChain,
+                      const ToolChain *DeviceToolChain, Action *HostAction,
+                      Action *DeviceAction, char *HostBoundArch,
+                      const char *DeviceBoundArch, unsigned HostOffloadKind,
+                      types::ID Type, OffloadKind OffloadDeviceKind);
 
   static bool classof(const Action *A) {
     return A->getKind() == CIRCombineJobClass;
   }
+
+  Action *getHostAction() { return HostAction; }
+  Action *getDeviceAction() { return DeviceAction; }
+
+  const ToolChain *getHostToolChain() const { return HostToolChain; }
+  const ToolChain *getDeviceToolChain() const { return DeviceToolChain; }
+
+  const char *getHostBoundArch() const { return HostBoundArch; }
+  const char *getDeviceBoundArch() const { return DeviceBoundArch; }
 };
 
 class SplitCIRJobAction : public JobAction {

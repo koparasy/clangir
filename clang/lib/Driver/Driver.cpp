@@ -2705,6 +2705,35 @@ static unsigned PrintActions1(const Compilation &C, Action *A,
           IsFirst = false;
           SibKind = OtherSibAction;
         });
+  } else if (CombineCIRJobAction *COA = dyn_cast<CombineCIRJobAction>(A)) {
+    bool IsFirst = true;
+    auto printAction = [&](Action *A, const ToolChain *TC,
+                           const char *BoundArch) {
+      assert(TC && "Unknown host toolchain");
+      // E.g. for two CUDA device dependences whose bound arch is sm_20 and
+      // sm_35 this will generate:
+      // "cuda-device" (nvptx64-nvidia-cuda:sm_20) {#ID}, "cuda-device"
+      // (nvptx64-nvidia-cuda:sm_35) {#ID}
+      if (!IsFirst)
+        os << ", ";
+      os << '"';
+      os << A->getOffloadingKindPrefix();
+      os << " (";
+      os << TC->getTriple().normalize();
+      if (BoundArch)
+        os << ":" << BoundArch;
+      os << ")";
+      os << '"';
+      os << " {" << PrintActions1(C, A, Ids, SibIndent, SibKind) << "}";
+      IsFirst = false;
+      SibKind = OtherSibAction;
+    };
+    printAction(COA->getHostAction(), COA->getHostToolChain(),
+                COA->getHostBoundArch());
+
+    printAction(COA->getDeviceAction(), COA->getOffloadingToolChain(),
+                COA->getDeviceBoundArch());
+
   } else {
     const ActionList *AL = &A->getInputs();
 
@@ -2724,7 +2753,7 @@ static unsigned PrintActions1(const Compilation &C, Action *A,
   // itself (e.g. (cuda-device, sm_20) or (cuda-host)).
   std::string offload_str;
   llvm::raw_string_ostream offload_os(offload_str);
-  if (!isa<OffloadAction>(A)) {
+  if (!isa<OffloadAction>(A) && !isa<CombineCIRJobAction>(A)) {
     auto S = A->getOffloadingKindPrefix();
     if (!S.empty()) {
       offload_os << ", (" << S;
@@ -3255,7 +3284,10 @@ class OffloadingActionBuilder final {
     // into a single CIR module and co-optimize them.
     virtual bool hasCIRCombineSupport() { return false; };
 
-    virtual void addCIRCombineActions(Action *&HostAction) {};
+    virtual void addCIRCombineSplitActions(const ToolChain *HostToolChainconst,
+                                           Action *&HostAction,
+                                           char *HostBoundArch,
+                                           unsigned HostOffloadKind) {};
   };
 
   /// Base class for CUDA/HIP action builder. It injects device code in
@@ -3855,32 +3887,31 @@ class OffloadingActionBuilder final {
     // into a single CIR module and co-optimize them.
     bool hasCIRCombineSupport() override { return true; };
 
-    void addCIRCombineActions(Action *&HostAction) override {
-      if (HostAction->getType() != types::TY_CIR)
-        return;
-
+    void addCIRCombineSplitActions(const ToolChain *HostToolChain,
+                                   Action *&HostAction, char *HostBoundArch,
+                                   unsigned HostOffloadKind) override {
       // This assumes that there are multiple actions. one per architecture
       // based on my understanding of the driver her. I am pretty sure this is
       // not needed for CIR combination.
       // TODO: Revisit this decision here once I have a working prototype for a
       // single arch.
-      for (Action *&A : CudaDeviceActions) {
-        if (A->getType() != types::TY_CIR)
-          continue;
-        Action *CirCombineAction =
-            C.MakeAction<CombineCIRJobAction>(HostAction, A, types::TY_CIR);
-        A = C.MakeAction<SplitCIRJobAction>(CirCombineAction, false,
-                                            types::TY_CIR,
-                                            A->getOffloadingDeviceKind());
-        auto *tmp = C.MakeAction<SplitCIRJobAction>(
-            CirCombineAction, true, types::TY_CIR,
-            Action::OffloadKind::OFK_None);
-        tmp->setHostOffloadInfo(HostAction->getOffloadingHostActiveKinds(),
-                                HostAction->getOffloadingArch());
-        llvm::errs() << "Host Action Offloading Arch: "
-                     << HostAction->getOffloadingHostActiveKinds() << " '"
-                     << HostAction->getOffloadingArch() << "'\n";
-        HostAction = tmp;
+
+      for (unsigned I = 0, E = GpuArchList.size(); I != E; ++I) {
+        const char *GPUArch = GpuArchList[I].ID;
+        for (Action *&A : CudaDeviceActions) {
+          if (A->getType() != types::TY_CIR)
+            continue;
+          Action *CirCombineAction = C.MakeAction<CombineCIRJobAction>(
+              HostToolChain, ToolChains.front(), HostAction, A, HostBoundArch,
+              GPUArch, HostOffloadKind, types::TY_CIR,
+              A->getOffloadingDeviceKind());
+          A = C.MakeAction<SplitCIRJobAction>(CirCombineAction, false,
+                                              types::TY_CIR,
+                                              A->getOffloadingDeviceKind());
+          HostAction = C.MakeAction<SplitCIRJobAction>(
+              CirCombineAction, true, types::TY_CIR,
+              Action::OffloadKind::OFK_None);
+        }
       }
     }
   };
@@ -3997,10 +4028,12 @@ public:
           A->propagateHostOffloadInfo(OFKLoc->second, /*BoundArch=*/nullptr);
         }
 
-        SB->addCIRCombineActions(HostAction);
+        if (HostAction->getType() != types::TY_CIR)
+          continue;
 
-        HostAction->setHostOffloadInfo(ActiveOffloadKinds,
-                                       /*BoundArch=*/nullptr);
+        SB->addCIRCombineSplitActions(
+            C.getSingleOffloadToolChain<Action::OFK_Host>(), HostAction,
+            nullptr, ActiveOffloadKinds);
       }
     }
 

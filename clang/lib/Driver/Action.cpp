@@ -81,19 +81,25 @@ void Action::propagateDeviceOffloadInfo(OffloadKind OKind, const char *OArch,
   // Offload action set its own kinds on their dependences.
   if (Kind == OffloadClass)
     return;
-  if (Kind == CIRCombineJobClass || Kind == CIRSplitJobClass)
-    return;
 
   // Unbundling actions use the host kinds.
   if (Kind == OffloadUnbundlingJobClass)
     return;
 
-  assert((OffloadingDeviceKind == OKind || OffloadingDeviceKind == OFK_None) &&
+  assert((Kind == CIRCombineJobClass || OffloadingDeviceKind == OKind ||
+          OffloadingDeviceKind == OFK_None) &&
          "Setting device kind to a different device??");
   assert(!ActiveOffloadKindMask && "Setting a device kind in a host action??");
   OffloadingDeviceKind = OKind;
   OffloadingArch = OArch;
   OffloadingToolChain = OToolChain;
+
+  if (Kind == CIRCombineJobClass) {
+    auto *CIRCombineAction = dyn_cast<CombineCIRJobAction>(this);
+    CIRCombineAction->getDeviceAction()->propagateDeviceOffloadInfo(
+        OffloadingDeviceKind, OArch, OToolChain);
+    return;
+  }
 
   for (auto *A : Inputs)
     A->propagateDeviceOffloadInfo(OffloadingDeviceKind, OArch, OToolChain);
@@ -103,14 +109,17 @@ void Action::propagateHostOffloadInfo(unsigned OKinds, const char *OArch) {
   // Offload action set its own kinds on their dependences.
   if (Kind == OffloadClass)
     return;
-
-  if (Kind == CIRCombineJobClass || Kind == CIRSplitJobClass)
-    return;
-
-  assert(OffloadingDeviceKind == OFK_None &&
+  assert((Kind == CIRCombineJobClass || OffloadingDeviceKind == OFK_None) &&
          "Setting a host kind in a device action.");
   ActiveOffloadKindMask |= OKinds;
   OffloadingArch = OArch;
+
+  if (Kind == CIRCombineJobClass) {
+    auto *CIRCombineAction = dyn_cast<CombineCIRJobAction>(this);
+    CIRCombineAction->getHostAction()->propagateHostOffloadInfo(
+        ActiveOffloadKindMask, OArch);
+    return;
+  }
 
   for (auto *A : Inputs)
     A->propagateHostOffloadInfo(ActiveOffloadKindMask, OArch);
@@ -473,20 +482,24 @@ OffloadPackagerJobAction::OffloadPackagerJobAction(ActionList &Inputs,
 
 void CombineCIRJobAction::anchor() {}
 
-CombineCIRJobAction::CombineCIRJobAction(Action *Host, Action *Device,
-                                         types::ID Type)
-    : JobAction(CIRCombineJobClass, {Host, Device}, Type), HostAction(Host),
-      DeviceAction(Device) {
+CombineCIRJobAction::CombineCIRJobAction(
+    const ToolChain *HostToolChain, const ToolChain *DeviceToolChain,
+    Action *HostAction, Action *DeviceAction, char *HostBoundArch,
+    const char *DeviceBoundArch, unsigned HostOffloadKind, types::ID Type,
+    OffloadKind OffloadDeviceKind)
+    : JobAction(CIRCombineJobClass, {HostAction, DeviceAction}, Type),
+      HostToolChain(HostToolChain), DeviceToolChain(DeviceToolChain),
+      HostAction(HostAction), DeviceAction(DeviceAction),
+      HostBoundArch(HostBoundArch), DeviceBoundArch(DeviceBoundArch),
+      HostOffloadKind(HostOffloadKind) {
 
-  OffloadingDeviceKind = OFK_None;
+  OffloadingDeviceKind = OffloadDeviceKind;
+  ActiveOffloadKindMask = 0;
 
   // Propagate info to the dependencies.
   // NOTE: THIS IS LIKELY THE LAST STEP OF MAKING THE -print-passes-work
   // properly. I need to extent the constructors and get access to the
   // toolchains
-  Device->propagateDeviceOffloadInfo(
-      Device->getOffloadingDeviceKind(), nullptr,
-      C.getSingleOffloadToolChain<Action::OFK_HIP>);
 }
 
 void SplitCIRJobAction::anchor() {}
