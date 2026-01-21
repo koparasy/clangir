@@ -3501,6 +3501,38 @@ class OffloadingActionBuilder final {
 
       return false;
     }
+
+    // Return true if this builder can support combining host and device modules
+    // into a single CIR module and co-optimize them.
+    bool hasCIRCombineSupport() override { return true; };
+
+    void addCIRCombineSplitActions(const ToolChain *HostToolChain,
+                                   Action *&HostAction, char *HostBoundArch,
+                                   unsigned HostOffloadKind) override {
+      // This assumes that there are multiple actions. one per architecture
+      // based on my understanding of the driver her. I am pretty sure this is
+      // not needed for CIR combination.
+      // TODO: Revisit this decision here once I have a working prototype for a
+      // single arch.
+
+      for (unsigned I = 0, E = GpuArchList.size(); I != E; ++I) {
+        const char *GPUArch = GpuArchList[I].ID;
+        for (Action *&A : CudaDeviceActions) {
+          if (A->getType() != types::TY_CIR)
+            continue;
+          Action *CirCombineAction = C.MakeAction<CombineCIRJobAction>(
+              HostToolChain, ToolChains.front(), HostAction, A, HostBoundArch,
+              GPUArch, HostOffloadKind, types::TY_CIR,
+              A->getOffloadingDeviceKind());
+          A = C.MakeAction<SplitCIRJobAction>(CirCombineAction, false,
+                                              types::TY_CIR,
+                                              A->getOffloadingDeviceKind());
+          HostAction = C.MakeAction<SplitCIRJobAction>(
+              CirCombineAction, true, types::TY_CIR,
+              Action::OffloadKind::OFK_None);
+        }
+      }
+    }
   };
 
   /// \brief CUDA action builder. It injects device code in the host backend
@@ -3882,38 +3914,6 @@ class OffloadingActionBuilder final {
     Action *appendLinkHostActions(ActionList &AL) override { return AL.back(); }
 
     void appendLinkDependences(OffloadAction::DeviceDependences &DA) override {}
-
-    // Return true if this builder can support combining host and device modules
-    // into a single CIR module and co-optimize them.
-    bool hasCIRCombineSupport() override { return true; };
-
-    void addCIRCombineSplitActions(const ToolChain *HostToolChain,
-                                   Action *&HostAction, char *HostBoundArch,
-                                   unsigned HostOffloadKind) override {
-      // This assumes that there are multiple actions. one per architecture
-      // based on my understanding of the driver her. I am pretty sure this is
-      // not needed for CIR combination.
-      // TODO: Revisit this decision here once I have a working prototype for a
-      // single arch.
-
-      for (unsigned I = 0, E = GpuArchList.size(); I != E; ++I) {
-        const char *GPUArch = GpuArchList[I].ID;
-        for (Action *&A : CudaDeviceActions) {
-          if (A->getType() != types::TY_CIR)
-            continue;
-          Action *CirCombineAction = C.MakeAction<CombineCIRJobAction>(
-              HostToolChain, ToolChains.front(), HostAction, A, HostBoundArch,
-              GPUArch, HostOffloadKind, types::TY_CIR,
-              A->getOffloadingDeviceKind());
-          A = C.MakeAction<SplitCIRJobAction>(CirCombineAction, false,
-                                              types::TY_CIR,
-                                              A->getOffloadingDeviceKind());
-          HostAction = C.MakeAction<SplitCIRJobAction>(
-              CirCombineAction, true, types::TY_CIR,
-              Action::OffloadKind::OFK_None);
-        }
-      }
-    }
   };
 
   ///
