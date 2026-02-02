@@ -472,7 +472,14 @@ CIRGenAction::CIRGenAction(OutputType Act, mlir::MLIRContext *MlirContext)
     : mlirContext(MlirContext ? MlirContext : new mlir::MLIRContext),
       action(Act) {}
 
-CIRGenAction::~CIRGenAction() { mlirModule.reset(); }
+CIRGenAction::~CIRGenAction() {
+  mlirModule.reset();
+  // Clean up mlirContext if we still own it
+  if (mlirContext) {
+    delete mlirContext;
+    mlirContext = nullptr;
+  }
+}
 
 void CIRGenAction::EndSourceFileAction() {
   // If the consumer creation failed, do nothing.
@@ -571,10 +578,16 @@ void CIRGenAction::ExecuteAction() {
   llvm::LLVMContext LlvmCtx;
   bool DisableDebugInfo =
       Ci.getCodeGenOpts().getDebugInfo() == llvm::codegenoptions::NoDebugInfo;
+  
+  // Transfer ownership of both the module and context to lowerFromCIRToLLVMIR.
+  auto *RawModule = MlirModule.release();
   auto LlvmModule = lowerFromCIRToLLVMIR(
-      Ci.getFrontendOpts(), MlirModule.release(),
+      Ci.getFrontendOpts(), RawModule,
       std::unique_ptr<mlir::MLIRContext>(mlirContext), LlvmCtx,
       /*disableVerifier=*/false, /*disableCCLowering=*/true, DisableDebugInfo);
+  
+  // Mark that we've transferred ownership so destructor doesn't double-free
+  mlirContext = nullptr;
 
   if (Outstream)
     LlvmModule->print(*Outstream, nullptr);
